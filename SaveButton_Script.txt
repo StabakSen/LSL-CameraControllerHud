@@ -1,0 +1,90 @@
+string index="2";
+integer listenHandle;
+vector pos=ZERO_VECTOR;
+vector foc=ZERO_VECTOR;
+integer perm;
+
+//Method to reset position
+reset_pos() {
+    if(checkPerm()) {
+        pos=ZERO_VECTOR;
+        foc=ZERO_VECTOR;
+        reset_button();
+        send_pos_foc(ZERO_VECTOR,ZERO_VECTOR);   
+        llOwnerSay("Camera position "+index+" reset. Please press Esc, set new camera position and click on HUD to save.");
+        llSetTexture(index, ALL_SIDES);  
+    } 
+}
+
+//Method to save position
+save_pos() {
+    if(checkPerm()) {
+        llOwnerSay("Saving camera position at "+index+".");
+        pos=llGetCameraPos();
+        foc=pos+llRot2Fwd(llGetCameraRot());
+        send_pos_foc(pos,foc);   
+        reset_button();
+        llSetTexture (index+"_yel", ALL_SIDES);  
+        llOwnerSay("Camera position at "+index+" saved.");
+    } 
+}
+ 
+reset_button() {
+     llClearCameraParams();
+     llSetCameraParams([ CAMERA_ACTIVE, FALSE ]);
+     llRegionSay(((integer) ("0x" + llGetSubString ((string) llGetOwner(), -8, -1)) | 0x80000000 ),  "CtrlC");
+}
+ 
+send_pos_foc(vector pos,vector foc) {
+    string msg="<"+(string)pos.x+","+(string)pos.y+","+(string)pos.z+">"+"#<"+(string)foc.x+","+(string)foc.y+","+(string)foc.z+">";
+    llRegionSay(((integer) ("0x" + llGetSubString ((string) llGetOwner(), -8, -1)) | 0x80000000 ),  "SavC"+index+msg);    
+}
+
+//Method to check permission
+integer checkPerm() {
+    perm = llGetPermissions();
+    if(perm & PERMISSION_CONTROL_CAMERA && perm & PERMISSION_TRACK_CAMERA ) {
+        return TRUE;
+    } else {
+        llOwnerSay("Camera permission not granted. Retrying to request permission.");
+        llRequestPermissions(llGetOwner(), PERMISSION_CONTROL_CAMERA | PERMISSION_TRACK_CAMERA);
+        return checkPerm();
+    }
+}
+
+default
+{
+    state_entry()
+    {
+        llRequestPermissions(llGetOwner(), PERMISSION_CONTROL_CAMERA | PERMISSION_TRACK_CAMERA);
+        llSetTexture(index, ALL_SIDES);
+        listenHandle = llListen(((integer) ("0x" + llGetSubString ((string) llGetOwner(), -8, -1)) | 0x80000000 ), "", "","");
+    }
+     
+    run_time_permissions (integer perms) {
+        perm = llGetPermissions();
+    }
+
+    touch_start(integer total_number)
+    {
+            //Decide if need to reset or save
+            if (pos!=ZERO_VECTOR) {
+                reset_pos();
+            } else {
+                save_pos();
+            }
+    }
+    
+    changed(integer change)
+    {
+        if (change & CHANGED_OWNER)
+        {
+            llResetScript();
+        }
+    }
+     
+    state_exit()
+    {
+        llListenRemove(listenHandle);
+    }
+}
