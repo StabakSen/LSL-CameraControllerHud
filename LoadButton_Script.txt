@@ -1,0 +1,87 @@
+string index="1";
+integer listenHandle;
+vector pos=ZERO_VECTOR;
+vector foc=ZERO_VECTOR;
+integer active= FALSE;
+integer perm;
+
+//Method to check permission
+integer checkPerm() {
+    perm = llGetPermissions();
+    if(perm & PERMISSION_CONTROL_CAMERA && perm & PERMISSION_TRACK_CAMERA ) {
+        return TRUE;
+    } else {
+        llOwnerSay("Camera permission not granted. Retrying to request permission.");
+        llRequestPermissions(llGetOwner(), PERMISSION_CONTROL_CAMERA | PERMISSION_TRACK_CAMERA);
+        return checkPerm();
+    }
+}
+
+default
+{
+    state_entry()
+    {
+        llSetTexture(index, ALL_SIDES);  
+        llRequestPermissions(llGetOwner(), PERMISSION_CONTROL_CAMERA | PERMISSION_TRACK_CAMERA);
+        listenHandle = llListen(((integer) ("0x" + llGetSubString ((string) llGetOwner(), -8, -1)) | 0x80000000 ), "", "","");
+    }
+
+    touch_start(integer total_number)
+    {
+        //Check if pos saved or not
+        if (pos==ZERO_VECTOR) {
+            llOwnerSay("Position "+index+" not saved. Please save a position first.");
+        } else {
+            perm = llGetPermissions();
+            if(checkPerm())
+            {
+                if(!active) {
+                    llOwnerSay("Applying camera position "+index);
+                    llClearCameraParams();
+                    llSetCameraParams([12,1,17,foc,6,0.0,13,pos,5,0.0,21,1,22,1]);
+                    //Notify other buttons that this button is active
+                    llRegionSay(((integer) ("0x" + llGetSubString ((string) llGetOwner(), -8, -1)) | 0x80000000 ), "CtrlC");       
+                    llSetTexture(index+"_red", ALL_SIDES);  
+                    active=TRUE;
+                } else {
+                    llClearCameraParams();
+                    llSetTexture(index, ALL_SIDES);  
+                    active=FALSE;
+                }
+            }  
+        } 
+    }
+    
+    listen(integer channel, string name, key id, string message) {
+        // Some other button is active
+        if (~llSubStringIndex(message, "CtrlC")) {
+            llSetTexture(index, ALL_SIDES);
+            if (checkPerm()) {
+                llClearCameraParams();
+                llSetCameraParams([ CAMERA_ACTIVE, FALSE ]);
+            }
+            active=FALSE;    
+        } else if (~llSubStringIndex(message, "SavC"+index)) {
+            list vectors = llParseString2List(message,[""],["SavC"+index,"#"]);
+            pos= (vector)llList2String(vectors,1);
+            foc= (vector)llList2String(vectors,3);
+        }
+    }
+    
+    changed(integer change)
+    {
+        if (change & CHANGED_OWNER)
+        {
+            llResetScript();
+        }
+    }
+    
+    run_time_permissions (integer perms) {
+        perm = llGetPermissions();
+    }
+     
+    state_exit()
+    {
+        llListenRemove(listenHandle);
+    }
+}
